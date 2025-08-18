@@ -1,0 +1,3 @@
+min_pvr: 0.5
+min_citation_precision: 0.5
+max_unverifiable: 0.2

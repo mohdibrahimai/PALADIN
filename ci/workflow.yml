@@ -1,0 +1,15 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: |
+          echo "No heavy dependencies for PALADIN"
+      - name: Run tests
+        run: |
+          python -m unittest discover -s paladin/tests -p "test_*.py"
