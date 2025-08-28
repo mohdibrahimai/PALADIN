@@ -1,0 +1,74 @@
+name: python-services
+on: [push, pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  services:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Detect Python services directory
+        shell: bash
+        run: |
+          set -e
+          PY_DIR=$(dirname "$(git ls-files '**/requirements.txt' | head -n1)")
+          if [ -z "$PY_DIR" ]; then
+            PY_DIR=$(dirname "$(git ls-files '**/scripts/run_demo.py' | head -n1)")
+          fi
+          echo "py_dir=$PY_DIR" >> $GITHUB_ENV
+          echo "Detected Python dir: '${PY_DIR:-<none>}'"
+          if [ -z "$PY_DIR" ]; then
+            mkdir -p artifacts
+            echo "## python-services\nNo Python service dir found." > artifacts/summary.md
+          fi
+
+      - name: Install requirements (guarded)
+        if: env.py_dir != ''
+        working-directory: ${{ env.py_dir }}
+        run: |
+          python -m pip install -U pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; else echo "No requirements.txt; skip."; fi
+
+      - name: Lint/Test/Demo (with fallbacks)
+        if: env.py_dir != ''
+        working-directory: ${{ env.py_dir }}
+        run: |
+          set -e
+          if [ -f Makefile ] && grep -qE '(^|\n)ci:' Makefile; then
+            make ci
+          elif [ -f scripts/run_demo.py ] && [ -f seeds/prompts.jsonl ]; then
+            mkdir -p artifacts
+            python -m scripts.run_demo --seed seeds/prompts.jsonl --outdir artifacts
+          elif [ -f scripts/check_feedback.py ]; then
+            mkdir -p artifacts
+            python -m scripts.check_feedback --outdir artifacts || python scripts/check_feedback.py
+          else
+            mkdir -p artifacts
+            echo "## python-services" > artifacts/summary.md
+            echo "No entrypoint found. Add Makefile:ci or scripts/run_demo.py." >> artifacts/summary.md
+          fi
+
+      - name: Job Summary
+        if: always()
+        run: |
+          for f in artifacts/summary.md ${{ env.py_dir }}/artifacts/summary.md; do
+            [ -f "$f" ] && { echo "" >> $GITHUB_STEP_SUMMARY; cat "$f" >> $GITHUB_STEP_SUMMARY; }
+          done
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-services-artifacts
+          path: |
+            ${{ env.py_dir }}/artifacts/*
+            artifacts/*
+          if-no-files-found: warn
