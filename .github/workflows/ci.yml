@@ -1,0 +1,31 @@
+name: CI
+on:
+  push: { branches: ["main"] }
+  pull_request: {}
+permissions: { contents: read }
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements.txt
+            requirements-dev.txt
+      - name: Install deps
+        run: |
+          python -m pip install -U pip
+          if [ -f pyproject.toml ]; then pip install -e .[dev]; \
+          elif [ -f requirements.txt ]; then pip install -r requirements.txt -r requirements-dev.txt; \
+          else echo "No dependency manifest found"; fi
+      - name: Lint
+        run: ruff check .
+      - name: Tests
+        run: pytest -q --cov --cov-report=xml
