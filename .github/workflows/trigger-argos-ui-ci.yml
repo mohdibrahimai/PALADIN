@@ -1,4 +1,4 @@
-name: argos-ui
+name: trigger argos-ui CI
 
 on:
   push:
@@ -19,10 +19,14 @@ jobs:
   ui:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - name: Detect UI directory
         id: detect
         shell: bash
@@ -35,23 +39,35 @@ jobs:
           else
             echo "SKIP_UI=true" >> $GITHUB_ENV
           fi
+
       - name: Skip (no UI present)
         if: env.SKIP_UI == 'true'
-        run: echo "Skipping UI; no package.json found."
-      - name: Install deps
+        run: |
+          echo "No package.json at repo root or in ui/, apps/ui/, frontend/. Skipping UI job cleanly."
+
+      - name: Install deps (auto-detect package manager)
         if: env.SKIP_UI != 'true'
-        working-directory: ${{ env.UI_DIR }}
         shell: bash
+        working-directory: ${{ env.UI_DIR }}
         run: |
           set -e
-          if [ -f "pnpm-lock.yaml" ]; then corepack enable && pnpm install --frozen-lockfile
-          elif [ -f "yarn.lock" ]; then corepack enable && yarn install --frozen-lockfile
-          elif [ -f "package-lock.json" ]; then npm ci
-          else npm install; fi
+          if [ -f "pnpm-lock.yaml" ]; then
+            corepack enable
+            pnpm install --frozen-lockfile
+          elif [ -f "yarn.lock" ]; then
+            corepack enable
+            yarn install --frozen-lockfile
+          elif [ -f "package-lock.json" ]; then
+            npm ci
+          else
+            npm install
+          fi
+
       - name: Build
         if: env.SKIP_UI != 'true'
         working-directory: ${{ env.UI_DIR }}
         run: npm run build --if-present
+
       - name: Test
         if: env.SKIP_UI != 'true'
         working-directory: ${{ env.UI_DIR }}
